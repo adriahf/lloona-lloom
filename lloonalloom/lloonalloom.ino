@@ -6,7 +6,10 @@
 #include <NTPClient.h>
 #include <WebServer.h>
 #include <math.h>
+#include <LittleFS.h>
+#include <ArduinoJson.h>
 #include "secrets.h"
+#include "webpage.h"
 
 // ==========================================
 // CONFIGURACIÓ GLOBAL
@@ -161,269 +164,6 @@ uint8_t calor_interior[NUM_INNER_LEDS];
 ColorRGBW color_base_exterior[NUM_OUTER_LEDS];
 ColorRGBW color_base_interior[NUM_INNER_LEDS];
 
-// Codi HTML i JS de la Interfície Web
-const char INDEX_HTML[] PROGMEM = R"=====(
-<!DOCTYPE html>
-<html lang="ca">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Control Lloona-Lloom</title>
-    <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #121212; color: #fff; padding: 20px; margin: 0; }
-        .card { background: #1e1e1e; padding: 20px; border-radius: 12px; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
-        h3 { margin-top: 0; border-bottom: 1px solid #333; padding-bottom: 10px; }
-        button { padding: 10px; border-radius: 8px; border: none; font-size: 14px; font-weight: bold; cursor: pointer; flex: 1; margin: 0 4px; }
-        .btn-active { background: #0d6efd; color: white; }
-        .btn-inactive { background: #333; color: #aaa; }
-        .btn-send { background: #198754; color: white; width: 100%; margin-top: 15px; font-size: 16px; padding: 15px; margin-left: 0; margin-right: 0;}
-        .row { display: flex; justify-content: space-between; margin-bottom: 15px; margin-left: -4px; margin-right: -4px; }
-        label { display: block; margin-bottom: 8px; font-size: 15px; }
-        input[type=range] { width: 100%; margin-bottom: 15px; }
-        input[type=datetime-local] { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #444; background: #222; color: #fff; font-size: 16px; box-sizing: border-box; margin-bottom: 15px;}
-        .disabled { display: none; }
-        .value-badge { float: right; background: #333; padding: 2px 8px; border-radius: 12px; font-size: 13px; font-family: monospace; }
-        #colorR { accent-color: #ff4d4d; }
-        #colorG { accent-color: #4dff4d; }
-        #colorB { accent-color: #4d4dff; }
-        #colorW { accent-color: #ffffff; }
-        .slider-group { display: flex; align-items: center; gap: 10px; margin-bottom: 15px; }
-        .slider-group input[type=range] { flex-grow: 1; margin: 0; }
-        .btn-step { width: 42px; height: 42px; border-radius: 8px; border: none; background: #444; color: white; font-size: 24px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; line-height: 1; padding-bottom: 4px; }
-        .btn-step:active { background: #666; }
-        #astroStatusLabel { background: #2c2c2c; padding: 10px; border-radius: 8px; font-weight: bold; font-size: 15px; text-align: center; margin-bottom: 20px; border: 1px solid #444; }
-        .fire-box { background: #3a1c0d; border: 1px solid #ff4500; padding: 12px; border-radius: 8px; margin-top: 15px; }
-    </style>
-</head>
-<body>
-    <h2 style="text-align: center; margin-bottom: 15px;">🌒 Lloona-Lloom UI</h2>
-    
-    <div id="astroStatusLabel">Cargant estat...</div>
-    
-    <div class="card">
-        <h3>Mode de Funcionament</h3>
-        <div class="row">
-            <button id="btnAstro" class="btn-active" onclick="setMode('astro')">Temps Real</button>
-            <button id="btnSim" class="btn-inactive" onclick="setMode('simulacio')">Simulació</button>
-            <button id="btnManual" class="btn-inactive" onclick="setMode('manual')">Manual</button>
-        </div>
-    </div>
-
-    <!-- Panell de Simulació Astronòmica -->
-    <div id="simControls" class="card disabled">
-        <h3>Viatge en el Temps</h3>
-        <p style="font-size: 13px; color: #aaa; margin-top: 0;">Tria una data i hora per renderitzar l'estat exacte d'aquell moment. S'aplicarà la teva zona horària local automàticament.</p>
-        <label>Data i Hora Local:</label>
-        <input type="datetime-local" id="simDate">
-        <button class="btn-send" onclick="sendSimulation()">Simular</button>
-    </div>
-
-    <!-- Panell de Control Manual de LEDs -->
-    <div id="manualControls" class="card disabled">
-        <h3>Selecció de LEDs</h3>
-        <label>
-            <input type="radio" name="ring" value="0" checked onchange="updateMaxId()"> Corona Exterior (0-70)
-        </label>
-        <label style="margin-top: 10px;">
-            <input type="radio" name="ring" value="1" onchange="updateMaxId()"> Corona Interior (0-71)
-        </label>
-        
-        <hr style="border-color: #333; margin: 15px 0;">
-        
-        <label>
-            <input type="checkbox" id="allLeds" checked onchange="toggleSlider()"> Aplicar a tota la corona
-        </label>
-
-        <div id="fireControl" class="fire-box">
-            <label style="margin: 0; color: #ffa07a; font-weight: bold;">
-                <input type="checkbox" id="fireEffect"> 🔥 Activar Efecte Foc (Crepitació)
-            </label>
-            <p style="font-size: 12px; margin: 5px 0 0 0; color: #ddd; font-weight: normal;">Pampallugueja modulant la intensitat dels colors manuals actuals. S'aplicarà quan cliquis el botó "Aplicar Color".</p>
-        </div>
-        
-        <div id="colorControlsWrapper">
-            <div style="margin-top: 15px;">
-                <label>ID del LED: <span id="ledIdVal" class="value-badge">Tots</span></label>
-                <div class="slider-group">
-                    <button class="btn-step" onclick="stepSlider('ledId', -1)">-</button>
-                    <input type="range" id="ledId" min="0" max="70" value="0" disabled oninput="updateLEDUI()">
-                    <button class="btn-step" onclick="stepSlider('ledId', 1)">+</button>
-                </div>
-            </div>
-            
-            <h3 style="margin-top: 20px;">Control RGBW</h3>
-            
-            <label>Vermell (R): <span id="rVal" class="value-badge">0</span></label>
-            <div class="slider-group">
-                <button class="btn-step" onclick="stepSlider('colorR', -1)">-</button>
-                <input type="range" id="colorR" min="0" max="255" value="0" oninput="updateColorUI()">
-                <button class="btn-step" onclick="stepSlider('colorR', 1)">+</button>
-            </div>
-            
-            <label>Verd (G): <span id="gVal" class="value-badge">0</span></label>
-            <div class="slider-group">
-                <button class="btn-step" onclick="stepSlider('colorG', -1)">-</button>
-                <input type="range" id="colorG" min="0" max="255" value="0" oninput="updateColorUI()">
-                <button class="btn-step" onclick="stepSlider('colorG', 1)">+</button>
-            </div>
-            
-            <label>Blau (B): <span id="bVal" class="value-badge">0</span></label>
-            <div class="slider-group">
-                <button class="btn-step" onclick="stepSlider('colorB', -1)">-</button>
-                <input type="range" id="colorB" min="0" max="255" value="0" oninput="updateColorUI()">
-                <button class="btn-step" onclick="stepSlider('colorB', 1)">+</button>
-            </div>
-            
-            <label>Blanc Pur (W): <span id="wVal" class="value-badge">0</span></label>
-            <div class="slider-group">
-                <button class="btn-step" onclick="stepSlider('colorW', -1)">-</button>
-                <input type="range" id="colorW" min="0" max="255" value="0" oninput="updateColorUI()">
-                <button class="btn-step" onclick="stepSlider('colorW', 1)">+</button>
-            </div>
-            
-            <button class="btn-send" onclick="sendColorData()">Aplicar Color</button>
-        </div>
-    </div>
-
-    <script>
-        // Variables d'estat globals del frontend
-        let fireExtOn = false;
-        let fireIntOn = false;
-
-        function updateStatusUI() {
-            fetch('/api/status')
-                .then(response => response.json())
-                .then(data => {
-                    let lbl = document.getElementById('astroStatusLabel');
-                    if (data.mode === 'manual') {
-                        lbl.innerHTML = '✋ Control Manual Actiu';
-                        lbl.style.borderColor = '#0d6efd';
-                    } else {
-                        let timeStr = data.is_daytime ? '☀️ Dia' : '🌙 Nit';
-                        let pct = (data.fraction * 100).toFixed(1);
-                        lbl.innerHTML = `${timeStr} &nbsp;|&nbsp; Lluna: ${pct}%`;
-                        lbl.style.borderColor = data.is_daytime ? '#f39c12' : '#8e44ad';
-                    }
-
-                    // Sincronitza variables d'estat locals
-                    fireExtOn = data.fire_ext_on;
-                    fireIntOn = data.fire_int_on;
-                    
-                    // Actualitza la casella visual segons l'anell seleccionat actualment
-                    let currentRing = document.querySelector('input[name="ring"]:checked').value;
-                    document.getElementById('fireEffect').checked = (currentRing === "0") ? fireExtOn : fireIntOn;
-
-                    if(data.mode === "manual") changeModeTabs('manual');
-                    else if(data.mode === "simulacio") {
-                        changeModeTabs('simulacio');
-                        if(data.sim_ts > 0 && !document.getElementById('simDate').value) {
-                            let simDate = new Date(data.sim_ts * 1000);
-                            simDate.setMinutes(simDate.getMinutes() - simDate.getTimezoneOffset());
-                            document.getElementById('simDate').value = simDate.toISOString().slice(0, 16);
-                        }
-                    } else changeModeTabs('astro');
-                });
-        }
-
-        function changeModeTabs(m) {
-            document.getElementById('btnAstro').className = (m === 'astro') ? 'btn-active' : 'btn-inactive';
-            document.getElementById('btnSim').className = (m === 'simulacio') ? 'btn-active' : 'btn-inactive';
-            document.getElementById('btnManual').className = (m === 'manual') ? 'btn-active' : 'btn-inactive';
-            
-            document.getElementById('manualControls').classList.add('disabled');
-            document.getElementById('simControls').classList.add('disabled');
-            
-            if(m === 'manual') document.getElementById('manualControls').classList.remove('disabled');
-            if(m === 'simulacio') {
-                document.getElementById('simControls').classList.remove('disabled');
-                if(!document.getElementById('simDate').value) {
-                    let now = new Date();
-                    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
-                    document.getElementById('simDate').value = now.toISOString().slice(0, 16);
-                }
-            }
-        }
-
-        function setMode(m) {
-            fetch('/api/mode?set=' + m).then(() => {
-                changeModeTabs(m);
-                updateStatusUI(); 
-            });
-        }
-
-        function sendSimulation() {
-            let dateVal = document.getElementById('simDate').value;
-            if(!dateVal) return;
-            let unixTimestamp = Math.floor(new Date(dateVal).getTime() / 1000);
-            fetch('/api/simulate?ts=' + unixTimestamp)
-                .then(response => {
-                    if(response.ok) updateStatusUI();
-                });
-        }
-
-        function stepSlider(id, step) {
-            let el = document.getElementById(id);
-            if (el.disabled) return;
-            let val = parseInt(el.value) + step;
-            if (val < parseInt(el.min)) val = parseInt(el.min);
-            if (val > parseInt(el.max)) val = parseInt(el.max);
-            el.value = val;
-            if (id === 'ledId') updateLEDUI();
-            else updateColorUI();
-        }
-
-        function updateMaxId() {
-            let ring = document.querySelector('input[name="ring"]:checked').value;
-            document.getElementById('ledId').max = (ring === "0") ? 70 : 71;
-            
-            // Canvia l'estat de la casella visual per reflectir el de l'anell actiu
-            document.getElementById('fireEffect').checked = (ring === "0") ? fireExtOn : fireIntOn;
-            
-            updateLEDUI();
-        }
-
-        function toggleSlider() {
-            let isAll = document.getElementById('allLeds').checked;
-            document.getElementById('ledId').disabled = isAll;
-            updateLEDUI();
-        }
-
-        function updateLEDUI() {
-            document.getElementById('ledIdVal').innerText = document.getElementById('allLeds').checked ? 'Tots' : document.getElementById('ledId').value;
-        }
-
-        function updateColorUI() {
-            document.getElementById('rVal').innerText = document.getElementById('colorR').value;
-            document.getElementById('gVal').innerText = document.getElementById('colorG').value;
-            document.getElementById('bVal').innerText = document.getElementById('colorB').value;
-            document.getElementById('wVal').innerText = document.getElementById('colorW').value;
-        }
-
-        function sendColorData() {
-            let ring = document.querySelector('input[name="ring"]:checked').value;
-            let id = document.getElementById('allLeds').checked ? -1 : document.getElementById('ledId').value;
-            let r = document.getElementById('colorR').value;
-            let g = document.getElementById('colorG').value;
-            let b = document.getElementById('colorB').value;
-            let w = document.getElementById('colorW').value;
-            
-            // Empaqueta l'estat desitjat del foc junt amb la instrucció de color
-            let f = document.getElementById('fireEffect').checked ? 1 : 0;
-            
-            fetch(`/api/led?ring=${ring}&id=${id}&r=${r}&g=${g}&b=${b}&w=${w}&f=${f}`)
-                .then(() => {
-                    // Actualitza l'estat local
-                    if (ring === "0") fireExtOn = (f === 1);
-                    else fireIntOn = (f === 1);
-                });
-        }
-
-        window.onload = updateStatusUI;
-    </script>
-</body>
-</html>
-)=====";
-
 // ==========================================
 // CAPA D'ABSTRACCIÓ DE MAQUINARI
 // ==========================================
@@ -447,6 +187,36 @@ void set_inner_pixel(float logical_angle, uint32_t color) {
     int index = NUM_OUTER_LEDS + (int)((physical_angle / 360.0) * NUM_INNER_LEDS);
     if (index >= NUM_LEDS) index = NUM_LEDS - 1; 
     tira.setPixelColor(index, color);
+}
+
+// ==========================================
+// FUNCIONS DE PERSISTÈNCIA (COMPRESSIÓ)
+// ==========================================
+// Comprimeix tot l'array de colors a una única cadena Hexadecimal pura (sense espais) per estalviar memòria al JSON
+String serializeColors(ColorRGBW* arr, int size) {
+    String out = "";
+    out.reserve(size * 8);
+    char buf[9];
+    for (int i = 0; i < size; i++) {
+        sprintf(buf, "%02X%02X%02X%02X", arr[i].r, arr[i].g, arr[i].b, arr[i].w);
+        out += buf;
+    }
+    return out;
+}
+
+// Descomprimeix la cadena Hexadecimal de tornada a l'array de la memòria RAM
+void deserializeColors(String hex, ColorRGBW* arr, int size) {
+    for (int i = 0; i < size; i++) {
+        if (i * 8 + 7 >= hex.length()) break;
+        char rBuf[3] = {hex[i * 8],     hex[i * 8 + 1], '\0'};
+        char gBuf[3] = {hex[i * 8 + 2], hex[i * 8 + 3], '\0'};
+        char bBuf[3] = {hex[i * 8 + 4], hex[i * 8 + 5], '\0'};
+        char wBuf[3] = {hex[i * 8 + 6], hex[i * 8 + 7], '\0'};
+        arr[i].r = strtoul(rBuf, NULL, 16);
+        arr[i].g = strtoul(gBuf, NULL, 16);
+        arr[i].b = strtoul(bBuf, NULL, 16);
+        arr[i].w = strtoul(wBuf, NULL, 16);
+    }
 }
 
 // ==========================================
@@ -540,7 +310,7 @@ void setup_web() {
         uint8_t g = server.arg("g").toInt();
         uint8_t b = server.arg("b").toInt();
         uint8_t w = server.arg("w").toInt();
-        int f = server.hasArg("f") ? server.arg("f").toInt() : 0; // Estat del foc
+        int f = server.hasArg("f") ? server.arg("f").toInt() : 0; 
 
         uint32_t color = tira.Color(r, g, b, w);
 
@@ -568,12 +338,112 @@ void setup_web() {
             }
         }
 
-        // Només mostrem forçat si cap dels dos anells està crepitant (el loop s'encarregarà dels crepitants)
         if (!exterior_crepitant || !interior_crepitant) {
             tira.show();
         }
         
         server.send(200, "text/plain", "OK");
+    });
+
+    // --- RUTES API PER A GESTIÓ DE PRESETS ---
+
+    server.on("/api/presets/list", HTTP_GET, []() {
+        String json = "[";
+        bool first = true;
+        File root = LittleFS.open("/");
+        if (root) {
+            File file = root.openNextFile();
+            while(file) {
+                String fn = String(file.name());
+                if(fn.startsWith("p_") || fn.startsWith("/p_")) {
+                    DynamicJsonDocument doc(4096);
+                    DeserializationError err = deserializeJson(doc, file);
+                    if (!err && doc.containsKey("name")) {
+                        if(!first) json += ",";
+                        json += "\"" + doc["name"].as<String>() + "\"";
+                        first = false;
+                    }
+                }
+                file = root.openNextFile();
+            }
+        }
+        json += "]";
+        server.send(200, "application/json", json);
+    });
+
+    server.on("/api/presets/save", HTTP_POST, []() {
+        if (!server.hasArg("name")) {
+            server.send(400, "text/plain", "Falta el nom");
+            return;
+        }
+        String name = server.arg("name");
+        String filename = "/p_" + name + ".json";
+        filename.replace(" ", "_"); // Sanitització bàsica per al nom del fitxer
+
+        DynamicJsonDocument doc(4096);
+        doc["name"] = name;
+        doc["ext"] = serializeColors(color_base_exterior, NUM_OUTER_LEDS);
+        doc["int"] = serializeColors(color_base_interior, NUM_INNER_LEDS);
+        doc["f_ext"] = exterior_crepitant;
+        doc["f_int"] = interior_crepitant;
+
+        File file = LittleFS.open(filename, "w");
+        if(file) {
+            serializeJson(doc, file);
+            file.close();
+            server.send(200, "text/plain", "OK");
+        } else {
+            server.send(500, "text/plain", "Error a l'escriure al FS");
+        }
+    });
+
+    server.on("/api/presets/load", HTTP_POST, []() {
+        if (!server.hasArg("name")) return server.send(400, "text/plain", "Falta el nom");
+        
+        String name = server.arg("name");
+        String filename = "/p_" + name + ".json";
+        filename.replace(" ", "_");
+        
+        File file = LittleFS.open(filename, "r");
+        if(file) {
+            DynamicJsonDocument doc(4096);
+            if(!deserializeJson(doc, file)) {
+                mode_actual = MODE_MANUAL;
+                
+                // Bolquem el JSON sobre la RAM
+                deserializeColors(doc["ext"].as<String>(), color_base_exterior, NUM_OUTER_LEDS);
+                deserializeColors(doc["int"].as<String>(), color_base_interior, NUM_INNER_LEDS);
+                exterior_crepitant = doc["f_ext"].as<bool>();
+                interior_crepitant = doc["f_int"].as<bool>();
+                
+                // Actualitzem l'estat visual immediatament
+                for(int i=0; i<NUM_OUTER_LEDS; i++) if(!exterior_crepitant) tira.setPixelColor(i, tira.Color(color_base_exterior[i].r, color_base_exterior[i].g, color_base_exterior[i].b, color_base_exterior[i].w));
+                for(int i=0; i<NUM_INNER_LEDS; i++) if(!interior_crepitant) tira.setPixelColor(NUM_OUTER_LEDS+i, tira.Color(color_base_interior[i].r, color_base_interior[i].g, color_base_interior[i].b, color_base_interior[i].w));
+                
+                if (!exterior_crepitant || !interior_crepitant) tira.show();
+                
+                server.send(200, "text/plain", "OK");
+            } else {
+                server.send(500, "text/plain", "Fitxer corrupte");
+            }
+            file.close();
+        } else {
+            server.send(404, "text/plain", "No trobat");
+        }
+    });
+
+    server.on("/api/presets/delete", HTTP_POST, []() {
+        if (!server.hasArg("name")) return server.send(400, "text/plain", "Falta el nom");
+        
+        String name = server.arg("name");
+        String filename = "/p_" + name + ".json";
+        filename.replace(" ", "_");
+        
+        if(LittleFS.remove(filename)) {
+            server.send(200, "text/plain", "OK");
+        } else {
+            server.send(500, "text/plain", "Error a l'esborrar");
+        }
     });
 
     server.begin();
@@ -646,19 +516,16 @@ void animar_foc_exterior() {
         else calor_exterior[i] -= cooldown;
     }
 
-    // Molta més probabilitat d'espurna principal
     if(random(255) < 200) { 
         int p = random(NUM_OUTER_LEDS);
         calor_exterior[p] = random(180, 255); 
     }
     
-    // Segona espurna freqüent
     if(random(255) < 120) { 
         int p = random(NUM_OUTER_LEDS);
         calor_exterior[p] = random(180, 255); 
     }
 
-    // Tercera espurna per donar-li molta presència
     if(random(255) < 60) { 
         int p = random(NUM_OUTER_LEDS);
         calor_exterior[p] = random(200, 255); 
@@ -714,13 +581,20 @@ void animar_foc_interior() {
 // BUCLE PRINCIPAL (MAIN LOOP)
 // ==========================================
 void setup() {
+    Serial.begin(115200);
+
+    // Inicialització del sistema de fitxers. Formata automàticament si és el primer cop
+    if (!LittleFS.begin(true)) {
+        Serial.println("Error muntant el sistema d'arxius LittleFS!");
+    }
+
     tira.begin();
     tira.clear();
     tira.show();
 
     // Inicialitzem el mapa de calor i un color base per defecte (Taronja apagat) per a les dues corones
     for(int i = 0; i < NUM_OUTER_LEDS; i++) {
-        calor_exterior[i] = 40; // Comencem ja en "brasa"
+        calor_exterior[i] = 40; 
         color_base_exterior[i] = {8, 2, 0, 0};
     }
     for(int i = 0; i < NUM_INNER_LEDS; i++) {
