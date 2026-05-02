@@ -22,8 +22,8 @@ const double LATITUD = SECRET_LATITUDE;
 const double LONGITUD = SECRET_LONGITUDE;
 
 const int PIN_DADES = 27;
-const int NUM_LEDS = 143;         
-const int NUM_OUTER_LEDS = 71;    
+const int NUM_LEDS = 144;         
+const int NUM_OUTER_LEDS = 72;    
 const int NUM_INNER_LEDS = 72;    
 
 Adafruit_NeoPixel tira = Adafruit_NeoPixel(NUM_LEDS, PIN_DADES, NEO_GRBW + NEO_KHZ800);
@@ -32,26 +32,27 @@ WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP, "pool.ntp.org", 0);
 
 // ==========================================
-// PALETA DE COLORS DIÜRNS
+// ESTRUCTURA DE COLOR (Ara inclou Foc Individual)
 // ==========================================
 struct ColorRGBW {
     uint8_t r;
     uint8_t g;
     uint8_t b;
     uint8_t w;
+    bool f; // Flag de Foc/Crepitació
 };
 
 const ColorRGBW PALETA_COLORS[10] = {
-    {10, 0, 0, 0},  // 0: VERMELL
-    {0, 10, 0, 0},  // 1: VERD
-    {0, 0, 10, 0},  // 2: BLAU
-    {0, 0, 0, 10},  // 3: BLANC
-    {6, 3, 0, 1},   // 4: GROC
-    {7, 0, 3, 0},   // 5: ROSA
-    {3, 0, 7, 0},   // 6: LILA
-    {0, 5, 5, 0},   // 7: TURQUESA
-    {0, 3, 3, 4},   // 8: BLANC_FRED
-    {8, 2, 0, 0}    // 9: TARONJA
+    {10, 0, 0, 0, false},  // 0: VERMELL
+    {0, 10, 0, 0, false},  // 1: VERD
+    {0, 0, 10, 0, false},  // 2: BLAU
+    {0, 0, 0, 10, false},  // 3: BLANC
+    {6, 3, 0, 1, false},   // 4: GROC
+    {7, 0, 3, 0, false},   // 5: ROSA
+    {3, 0, 7, 0, false},   // 6: LILA
+    {0, 5, 5, 0, false},   // 7: TURQUESA
+    {0, 3, 3, 4, false},   // 8: BLANC_FRED
+    {8, 2, 0, 0, false}    // 9: TARONJA
 };
 
 // ==========================================
@@ -151,9 +152,9 @@ enum SystemMode { MODE_ASTRO, MODE_SIMULACIO, MODE_MANUAL };
 SystemMode mode_actual = MODE_ASTRO;
 time_t simulacio_timestamp = 0;
 
-// Variables per a l'animació del foc (Les dues corones)
-bool exterior_crepitant = false;
-bool interior_crepitant = false;
+// Variables per a l'animació del foc (Ara vinculat a LEDs concrets)
+bool has_fire_ext = false;
+bool has_fire_int = false;
 
 unsigned long ultim_frame_foc_ext = 0;
 unsigned long ultim_frame_foc_int = 0;
@@ -190,33 +191,39 @@ void set_inner_pixel(float logical_angle, uint32_t color) {
 }
 
 // ==========================================
-// FUNCIONS DE PERSISTÈNCIA (COMPRESSIÓ)
+// FUNCIONS DE PERSISTÈNCIA (HEXADECIMAL)
 // ==========================================
-// Comprimeix tot l'array de colors a una única cadena Hexadecimal pura (sense espais) per estalviar memòria al JSON
+// Hem actualitzat l'esquema. Cada LED són 9 caràcters: RRGGBBWWF (F=0 o 1)
 String serializeColors(ColorRGBW* arr, int size) {
     String out = "";
-    out.reserve(size * 8);
-    char buf[9];
+    out.reserve(size * 9);
+    char buf[10];
     for (int i = 0; i < size; i++) {
-        sprintf(buf, "%02X%02X%02X%02X", arr[i].r, arr[i].g, arr[i].b, arr[i].w);
+        sprintf(buf, "%02X%02X%02X%02X%1d", arr[i].r, arr[i].g, arr[i].b, arr[i].w, arr[i].f ? 1 : 0);
         out += buf;
     }
     return out;
 }
 
-// Descomprimeix la cadena Hexadecimal de tornada a l'array de la memòria RAM
 void deserializeColors(String hex, ColorRGBW* arr, int size) {
     for (int i = 0; i < size; i++) {
-        if (i * 8 + 7 >= hex.length()) break;
-        char rBuf[3] = {hex[i * 8],     hex[i * 8 + 1], '\0'};
-        char gBuf[3] = {hex[i * 8 + 2], hex[i * 8 + 3], '\0'};
-        char bBuf[3] = {hex[i * 8 + 4], hex[i * 8 + 5], '\0'};
-        char wBuf[3] = {hex[i * 8 + 6], hex[i * 8 + 7], '\0'};
+        if (i * 9 + 8 >= hex.length()) break;
+        char rBuf[3] = {hex[i * 9],     hex[i * 9 + 1], '\0'};
+        char gBuf[3] = {hex[i * 9 + 2], hex[i * 9 + 3], '\0'};
+        char bBuf[3] = {hex[i * 9 + 4], hex[i * 9 + 5], '\0'};
+        char wBuf[3] = {hex[i * 9 + 6], hex[i * 9 + 7], '\0'};
+        char fBuf[2] = {hex[i * 9 + 8], '\0'};
+        
         arr[i].r = strtoul(rBuf, NULL, 16);
         arr[i].g = strtoul(gBuf, NULL, 16);
         arr[i].b = strtoul(bBuf, NULL, 16);
         arr[i].w = strtoul(wBuf, NULL, 16);
+        arr[i].f = (fBuf[0] == '1');
     }
+}
+
+uint8_t hexToByte(String hex) {
+    return (uint8_t) strtoul(hex.c_str(), NULL, 16);
 }
 
 // ==========================================
@@ -253,10 +260,7 @@ void setup_web() {
         json += "\"mode\":\"" + m_str + "\",";
         json += "\"sim_ts\":" + String(simulacio_timestamp) + ",";
         json += "\"fraction\":" + String(dades_actuals.fraction, 4) + ",";
-        json += "\"tilt\":" + String(dades_actuals.tiltAngle, 2) + ",";
         json += "\"is_daytime\":" + String(dades_actuals.is_daytime ? "true" : "false") + ",";
-        json += "\"fire_ext_on\":" + String(exterior_crepitant ? "true" : "false") + ",";
-        json += "\"fire_int_on\":" + String(interior_crepitant ? "true" : "false") + ",";
         json += "\"timestamp\":" + String(timeClient.getEpochTime());
         json += "}";
         server.send(200, "application/json", json);
@@ -269,12 +273,10 @@ void setup_web() {
                 mode_actual = MODE_MANUAL;
             } else if (nou_mode == "simulacio") {
                 mode_actual = MODE_SIMULACIO;
-                exterior_crepitant = false; 
-                interior_crepitant = false;
+                has_fire_ext = false; has_fire_int = false;
             } else if (nou_mode == "astro") {
                 mode_actual = MODE_ASTRO;
-                exterior_crepitant = false;
-                interior_crepitant = false;
+                has_fire_ext = false; has_fire_int = false;
                 ultim_calcul = 0; 
             }
         }
@@ -285,8 +287,7 @@ void setup_web() {
         if (server.hasArg("ts")) {
             simulacio_timestamp = server.arg("ts").toInt();
             mode_actual = MODE_SIMULACIO;
-            exterior_crepitant = false;
-            interior_crepitant = false;
+            has_fire_ext = false; has_fire_int = false;
             
             dades_actuals = moonCalc.calculate(simulacio_timestamp);
             extern void render_astro_state();
@@ -298,51 +299,82 @@ void setup_web() {
         }
     });
 
-    server.on("/api/led", []() {
-        if (mode_actual != MODE_MANUAL) {
-            server.send(403, "text/plain", "Error: No estas en mode manual");
-            return;
-        }
+    // API RENOVADA: Ara accepta l'estat pur HEXADECIMAL des de la web (Súper ràpid)
+    server.on("/api/led", HTTP_POST, []() {
+        if (mode_actual != MODE_MANUAL) return server.send(403, "text/plain", "No manual");
+        if (!server.hasArg("plain")) return server.send(400, "text/plain", "Manca el payload");
 
-        int ring = server.arg("ring").toInt(); 
-        int id = server.arg("id").toInt();     
-        uint8_t r = server.arg("r").toInt();
-        uint8_t g = server.arg("g").toInt();
-        uint8_t b = server.arg("b").toInt();
-        uint8_t w = server.arg("w").toInt();
-        int f = server.hasArg("f") ? server.arg("f").toInt() : 0; 
+        String body = server.arg("plain");
+        DynamicJsonDocument doc(4096);
+        DeserializationError err = deserializeJson(doc, body);
+        if (err) return server.send(400, "text/plain", "JSON invalid");
 
-        uint32_t color = tira.Color(r, g, b, w);
+        String ext = doc["ext"].as<String>();
+        String int_str = doc["int"].as<String>();
 
-        if (ring == 0) {
-            exterior_crepitant = (f == 1); 
-            if (id == -1) {
-                for (int i = 0; i < NUM_OUTER_LEDS; i++) {
-                    color_base_exterior[i] = {r, g, b, w};
-                    if (!exterior_crepitant) tira.setPixelColor(i, color);
-                }
-            } else if (id >= 0 && id < NUM_OUTER_LEDS) {
-                color_base_exterior[id] = {r, g, b, w}; 
-                if (!exterior_crepitant) tira.setPixelColor(id, color);
-            }
-        } else if (ring == 1) {
-            interior_crepitant = (f == 1);
-            if (id == -1) {
-                for (int i = 0; i < NUM_INNER_LEDS; i++) {
-                    color_base_interior[i] = {r, g, b, w};
-                    if (!interior_crepitant) tira.setPixelColor(NUM_OUTER_LEDS + i, color);
-                }
-            } else if (id >= 0 && id < NUM_INNER_LEDS) {
-                color_base_interior[id] = {r, g, b, w};
-                if (!interior_crepitant) tira.setPixelColor(NUM_OUTER_LEDS + id, color);
+        has_fire_ext = false;
+        has_fire_int = false;
+
+        // Processar Exterior (Amb efecte mirall Físic <-> Lògic)
+        for (int ui_i = 0; ui_i < NUM_OUTER_LEDS; ui_i++) {
+            if (ui_i * 9 + 8 >= ext.length()) break;
+            int phys_i = (NUM_OUTER_LEDS - ui_i) % NUM_OUTER_LEDS;
+            
+            color_base_exterior[phys_i].r = hexToByte(ext.substring(ui_i*9, ui_i*9+2));
+            color_base_exterior[phys_i].g = hexToByte(ext.substring(ui_i*9+2, ui_i*9+4));
+            color_base_exterior[phys_i].b = hexToByte(ext.substring(ui_i*9+4, ui_i*9+6));
+            color_base_exterior[phys_i].w = hexToByte(ext.substring(ui_i*9+6, ui_i*9+8));
+            color_base_exterior[phys_i].f = (ext[ui_i*9+8] == '1');
+            
+            if (color_base_exterior[phys_i].f) has_fire_ext = true;
+            
+            // Si no té foc, el pintem ja directament a la memòria
+            if (!color_base_exterior[phys_i].f) {
+                tira.setPixelColor(phys_i, tira.Color(color_base_exterior[phys_i].r, color_base_exterior[phys_i].g, color_base_exterior[phys_i].b, color_base_exterior[phys_i].w));
             }
         }
 
-        if (!exterior_crepitant || !interior_crepitant) {
-            tira.show();
+        // Processar Interior
+        for (int ui_i = 0; ui_i < NUM_INNER_LEDS; ui_i++) {
+            if (ui_i * 9 + 8 >= int_str.length()) break;
+            int phys_rel_id = (NUM_INNER_LEDS - ui_i) % NUM_INNER_LEDS;
+            int phys_id = NUM_OUTER_LEDS + phys_rel_id;
+            
+            color_base_interior[phys_rel_id].r = hexToByte(int_str.substring(ui_i*9, ui_i*9+2));
+            color_base_interior[phys_rel_id].g = hexToByte(int_str.substring(ui_i*9+2, ui_i*9+4));
+            color_base_interior[phys_rel_id].b = hexToByte(int_str.substring(ui_i*9+4, ui_i*9+6));
+            color_base_interior[phys_rel_id].w = hexToByte(int_str.substring(ui_i*9+6, ui_i*9+8));
+            color_base_interior[phys_rel_id].f = (int_str[ui_i*9+8] == '1');
+            
+            if (color_base_interior[phys_rel_id].f) has_fire_int = true;
+            
+            if (!color_base_interior[phys_rel_id].f) {
+                tira.setPixelColor(phys_id, tira.Color(color_base_interior[phys_rel_id].r, color_base_interior[phys_rel_id].g, color_base_interior[phys_rel_id].b, color_base_interior[phys_rel_id].w));
+            }
+        }
+
+        tira.show(); // Esborratge net i aplicació immediata de la Sincronització
+        server.send(200, "text/plain", "OK");
+    });
+
+    server.on("/api/colors", HTTP_GET, []() {
+        String out_ext = ""; out_ext.reserve(NUM_OUTER_LEDS * 9);
+        char buf[10];
+        for (int i = 0; i < NUM_OUTER_LEDS; i++) {
+            int phys_i = (NUM_OUTER_LEDS - i) % NUM_OUTER_LEDS;
+            sprintf(buf, "%02X%02X%02X%02X%1d", color_base_exterior[phys_i].r, color_base_exterior[phys_i].g, color_base_exterior[phys_i].b, color_base_exterior[phys_i].w, color_base_exterior[phys_i].f ? 1 : 0);
+            out_ext += buf;
         }
         
-        server.send(200, "text/plain", "OK");
+        String out_int = ""; out_int.reserve(NUM_INNER_LEDS * 9);
+        for (int i = 0; i < NUM_INNER_LEDS; i++) {
+            int phys_i = (NUM_INNER_LEDS - i) % NUM_INNER_LEDS;
+            sprintf(buf, "%02X%02X%02X%02X%1d", color_base_interior[phys_i].r, color_base_interior[phys_i].g, color_base_interior[phys_i].b, color_base_interior[phys_i].w, color_base_interior[phys_i].f ? 1 : 0);
+            out_int += buf;
+        }
+
+        String json = "{\"ext\":\"" + out_ext + "\",\"int\":\"" + out_int + "\"}";
+        server.send(200, "application/json", json);
     });
 
     // --- RUTES API PER A GESTIÓ DE PRESETS ---
@@ -378,14 +410,12 @@ void setup_web() {
         }
         String name = server.arg("name");
         String filename = "/p_" + name + ".json";
-        filename.replace(" ", "_"); // Sanitització bàsica per al nom del fitxer
+        filename.replace(" ", "_");
 
         DynamicJsonDocument doc(4096);
         doc["name"] = name;
         doc["ext"] = serializeColors(color_base_exterior, NUM_OUTER_LEDS);
         doc["int"] = serializeColors(color_base_interior, NUM_INNER_LEDS);
-        doc["f_ext"] = exterior_crepitant;
-        doc["f_int"] = interior_crepitant;
 
         File file = LittleFS.open(filename, "w");
         if(file) {
@@ -393,7 +423,7 @@ void setup_web() {
             file.close();
             server.send(200, "text/plain", "OK");
         } else {
-            server.send(500, "text/plain", "Error a l'escriure al FS");
+            server.send(500, "text/plain", "Error FS");
         }
     });
 
@@ -409,19 +439,22 @@ void setup_web() {
             DynamicJsonDocument doc(4096);
             if(!deserializeJson(doc, file)) {
                 mode_actual = MODE_MANUAL;
+                has_fire_ext = false;
+                has_fire_int = false;
                 
-                // Bolquem el JSON sobre la RAM
                 deserializeColors(doc["ext"].as<String>(), color_base_exterior, NUM_OUTER_LEDS);
                 deserializeColors(doc["int"].as<String>(), color_base_interior, NUM_INNER_LEDS);
-                exterior_crepitant = doc["f_ext"].as<bool>();
-                interior_crepitant = doc["f_int"].as<bool>();
                 
-                // Actualitzem l'estat visual immediatament
-                for(int i=0; i<NUM_OUTER_LEDS; i++) if(!exterior_crepitant) tira.setPixelColor(i, tira.Color(color_base_exterior[i].r, color_base_exterior[i].g, color_base_exterior[i].b, color_base_exterior[i].w));
-                for(int i=0; i<NUM_INNER_LEDS; i++) if(!interior_crepitant) tira.setPixelColor(NUM_OUTER_LEDS+i, tira.Color(color_base_interior[i].r, color_base_interior[i].g, color_base_interior[i].b, color_base_interior[i].w));
+                for(int i=0; i<NUM_OUTER_LEDS; i++) {
+                    if(color_base_exterior[i].f) has_fire_ext = true;
+                    if(!color_base_exterior[i].f) tira.setPixelColor(i, tira.Color(color_base_exterior[i].r, color_base_exterior[i].g, color_base_exterior[i].b, color_base_exterior[i].w));
+                }
+                for(int i=0; i<NUM_INNER_LEDS; i++) {
+                    if(color_base_interior[i].f) has_fire_int = true;
+                    if(!color_base_interior[i].f) tira.setPixelColor(NUM_OUTER_LEDS+i, tira.Color(color_base_interior[i].r, color_base_interior[i].g, color_base_interior[i].b, color_base_interior[i].w));
+                }
                 
-                if (!exterior_crepitant || !interior_crepitant) tira.show();
-                
+                tira.show();
                 server.send(200, "text/plain", "OK");
             } else {
                 server.send(500, "text/plain", "Fitxer corrupte");
@@ -434,16 +467,12 @@ void setup_web() {
 
     server.on("/api/presets/delete", HTTP_POST, []() {
         if (!server.hasArg("name")) return server.send(400, "text/plain", "Falta el nom");
-        
         String name = server.arg("name");
         String filename = "/p_" + name + ".json";
         filename.replace(" ", "_");
         
-        if(LittleFS.remove(filename)) {
-            server.send(200, "text/plain", "OK");
-        } else {
-            server.send(500, "text/plain", "Error a l'esborrar");
-        }
+        if(LittleFS.remove(filename)) server.send(200, "text/plain", "OK");
+        else server.send(500, "text/plain", "Error a l'esborrar");
     });
 
     server.begin();
@@ -462,9 +491,7 @@ void render_astro_state() {
         int idx_outer = random(0, 10);
         int idx_inner = random(0, 10);
         
-        if (idx_inner == idx_outer) {
-            idx_inner = (idx_inner + 1) % 10;
-        }
+        if (idx_inner == idx_outer) idx_inner = (idx_inner + 1) % 10;
 
         uint32_t color_outer = tira.Color(PALETA_COLORS[idx_outer].r, PALETA_COLORS[idx_outer].g, PALETA_COLORS[idx_outer].b, PALETA_COLORS[idx_outer].w);
         uint32_t color_inner = tira.Color(PALETA_COLORS[idx_inner].r, PALETA_COLORS[idx_inner].g, PALETA_COLORS[idx_inner].b, PALETA_COLORS[idx_inner].w);
@@ -497,83 +524,74 @@ void render_astro_state() {
             }
             
             uint8_t w_val = (uint8_t)(intensity_factor * max_brightness);
-            
-            if (w_val > 0) {
-                set_inner_pixel(angle_logic, tira.Color(0, 0, 0, w_val));
-            }
+            if (w_val > 0) set_inner_pixel(angle_logic, tira.Color(0, 0, 0, w_val));
         }
     }
     tira.show();
 }
 
 // ==========================================
-// RENDERITZAT: ANIMACIÓ DE FOC MANUAL (MODULAT)
+// RENDERITZAT: ANIMACIÓ DE FOC MANUAL INDIVIDUAL
 // ==========================================
 void animar_foc_exterior() {
-    for(int i = 0; i < NUM_OUTER_LEDS; i++) {
-        int cooldown = random(0, 6);  // Refredament encara més lent
-        if(calor_exterior[i] <= cooldown + 40) calor_exterior[i] = 40; // Base "brasa" perquè no s'apagui del tot
-        else calor_exterior[i] -= cooldown;
-    }
-
-    if(random(255) < 200) { 
-        int p = random(NUM_OUTER_LEDS);
-        calor_exterior[p] = random(180, 255); 
-    }
+    int fire_leds[NUM_OUTER_LEDS];
+    int count = 0;
     
-    if(random(255) < 120) { 
-        int p = random(NUM_OUTER_LEDS);
-        calor_exterior[p] = random(180, 255); 
+    for(int i = 0; i < NUM_OUTER_LEDS; i++) {
+        if(color_base_exterior[i].f) {
+            fire_leds[count++] = i;
+            int cooldown = random(0, 6);
+            if(calor_exterior[i] <= cooldown + 40) calor_exterior[i] = 40; 
+            else calor_exterior[i] -= cooldown;
+        }
     }
 
-    if(random(255) < 60) { 
-        int p = random(NUM_OUTER_LEDS);
-        calor_exterior[p] = random(200, 255); 
+    if(count > 0) {
+        if(random(255) < 200) calor_exterior[fire_leds[random(count)]] = random(180, 255); 
+        if(random(255) < 120) calor_exterior[fire_leds[random(count)]] = random(180, 255); 
+        if(random(255) < 60)  calor_exterior[fire_leds[random(count)]] = random(200, 255); 
     }
 
     for(int i = 0; i < NUM_OUTER_LEDS; i++) {
-        uint8_t heat = calor_exterior[i]; 
-        
-        uint8_t r_mod = (color_base_exterior[i].r * heat) / 255;
-        uint8_t g_mod = (color_base_exterior[i].g * heat) / 255;
-        uint8_t b_mod = (color_base_exterior[i].b * heat) / 255;
-        uint8_t w_mod = (color_base_exterior[i].w * heat) / 255;
-
-        tira.setPixelColor(i, tira.Color(r_mod, g_mod, b_mod, w_mod));
+        if(color_base_exterior[i].f) {
+            uint8_t heat = calor_exterior[i]; 
+            uint8_t r_mod = (color_base_exterior[i].r * heat) / 255;
+            uint8_t g_mod = (color_base_exterior[i].g * heat) / 255;
+            uint8_t b_mod = (color_base_exterior[i].b * heat) / 255;
+            uint8_t w_mod = (color_base_exterior[i].w * heat) / 255;
+            tira.setPixelColor(i, tira.Color(r_mod, g_mod, b_mod, w_mod));
+        }
     }
 }
 
 void animar_foc_interior() {
+    int fire_leds[NUM_INNER_LEDS];
+    int count = 0;
+
     for(int i = 0; i < NUM_INNER_LEDS; i++) {
-        int cooldown = random(0, 6);  
-        if(calor_interior[i] <= cooldown + 40) calor_interior[i] = 40; // Base "brasa"
-        else calor_interior[i] -= cooldown;
+        if(color_base_interior[i].f) {
+            fire_leds[count++] = i;
+            int cooldown = random(0, 6);  
+            if(calor_interior[i] <= cooldown + 40) calor_interior[i] = 40;
+            else calor_interior[i] -= cooldown;
+        }
     }
 
-    if(random(255) < 200) { 
-        int p = random(NUM_INNER_LEDS);
-        calor_interior[p] = random(180, 255); 
-    }
-    
-    if(random(255) < 120) { 
-        int p = random(NUM_INNER_LEDS);
-        calor_interior[p] = random(180, 255); 
-    }
-
-    if(random(255) < 60) { 
-        int p = random(NUM_INNER_LEDS);
-        calor_interior[p] = random(200, 255); 
+    if(count > 0) {
+        if(random(255) < 200) calor_interior[fire_leds[random(count)]] = random(180, 255); 
+        if(random(255) < 120) calor_interior[fire_leds[random(count)]] = random(180, 255); 
+        if(random(255) < 60)  calor_interior[fire_leds[random(count)]] = random(200, 255); 
     }
 
     for(int i = 0; i < NUM_INNER_LEDS; i++) {
-        uint8_t heat = calor_interior[i]; 
-        
-        uint8_t r_mod = (color_base_interior[i].r * heat) / 255;
-        uint8_t g_mod = (color_base_interior[i].g * heat) / 255;
-        uint8_t b_mod = (color_base_interior[i].b * heat) / 255;
-        uint8_t w_mod = (color_base_interior[i].w * heat) / 255;
-
-        tira.setPixelColor(NUM_OUTER_LEDS + i, tira.Color(r_mod, g_mod, b_mod, w_mod));
+        if(color_base_interior[i].f) {
+            uint8_t heat = calor_interior[i]; 
+            uint8_t r_mod = (color_base_interior[i].r * heat) / 255;
+            uint8_t g_mod = (color_base_interior[i].g * heat) / 255;
+            uint8_t b_mod = (color_base_interior[i].b * heat) / 255;
+            uint8_t w_mod = (color_base_interior[i].w * heat) / 255;
+            tira.setPixelColor(NUM_OUTER_LEDS + i, tira.Color(r_mod, g_mod, b_mod, w_mod));
+        }
     }
 }
 
@@ -583,7 +601,6 @@ void animar_foc_interior() {
 void setup() {
     Serial.begin(115200);
 
-    // Inicialització del sistema de fitxers. Formata automàticament si és el primer cop
     if (!LittleFS.begin(true)) {
         Serial.println("Error muntant el sistema d'arxius LittleFS!");
     }
@@ -592,14 +609,13 @@ void setup() {
     tira.clear();
     tira.show();
 
-    // Inicialitzem el mapa de calor i un color base per defecte (Taronja apagat) per a les dues corones
     for(int i = 0; i < NUM_OUTER_LEDS; i++) {
         calor_exterior[i] = 40; 
-        color_base_exterior[i] = {8, 2, 0, 0};
+        color_base_exterior[i] = {8, 2, 0, 0, false};
     }
     for(int i = 0; i < NUM_INNER_LEDS; i++) {
         calor_interior[i] = 40;
-        color_base_interior[i] = {8, 2, 0, 0};
+        color_base_interior[i] = {8, 2, 0, 0, false};
     }
 
     setup_wifi();
@@ -631,15 +647,13 @@ void loop() {
     else if (mode_actual == MODE_MANUAL) {
         bool show_needed = false;
         
-        // Animació foc Exterior
-        if (exterior_crepitant && (temps_actual - ultim_frame_foc_ext >= 30)) {
+        if (has_fire_ext && (temps_actual - ultim_frame_foc_ext >= 30)) {
             ultim_frame_foc_ext = temps_actual;
             animar_foc_exterior();
             show_needed = true;
         }
         
-        // Animació foc Interior
-        if (interior_crepitant && (temps_actual - ultim_frame_foc_int >= 30)) {
+        if (has_fire_int && (temps_actual - ultim_frame_foc_int >= 30)) {
             ultim_frame_foc_int = temps_actual;
             animar_foc_interior();
             show_needed = true;
