@@ -10,16 +10,13 @@ El projecte neix de la voluntat de tenir una lluna pròpia a casa: experimentar 
 
 Fotografies del muntatge real: el mateix objecte explora la llum blanca reproduint la lluna a temps real i el contrast entre el centre i l'halo exterior.
 
-<table>
-  <tr>
-    <td width="50%" align="center"><a href="img/photos/scene_1.jpeg"><img src="img/photos/scene_1.jpeg" height="480" alt="Fotografia del llum a la paret, amb el cercle il·luminat en blanc"></a></td>
-    <td width="50%" align="center"><a href="img/photos/scene_2.jpeg"><img src="img/photos/scene_2.jpeg" height="480" alt="Fotografia del llum a l'habitació, amb el centre blau violaci i un halo coral"></a></td>
-  </tr>
-  <tr>
-    <td align="center"><strong>Llum blanca</strong><br>El cercle de llum sobre la superfície del llum.</td>
-    <td align="center"><strong>Atmosfera de color</strong><br>Centre blau violaci i halo exterior coral.</td>
-  </tr>
-</table>
+<!-- Amplades proporcionals a una altura de 360 px: GitHub pot recalcular height amb height:auto. -->
+<p align="center">
+  <a href="img/photos/scene_1.jpeg"><img src="img/photos/scene_1.jpeg" width="271.06" height="360" alt="Fotografia del llum a la paret, amb el cercle il·luminat en blanc"></a>
+  <a href="img/photos/scene_2.jpeg"><img src="img/photos/scene_2.jpeg" width="240.82" height="360" alt="Fotografia del llum a l'habitació, amb el centre blau violaci i un halo coral"></a>
+</p>
+
+**Llum blanca:** el cercle de llum sobre la superfície del llum. **Atmosfera de color:** centre blau violaci i halo exterior coral. Fotografies en aquest ordre.
 
 ## Contingut
 
@@ -53,23 +50,14 @@ La interfície està pensada per al mòbil vertical i s'adapta també a l'escrip
 
 ### Captures de pantalla
 
-<table>
-  <tr>
-    <th width="33%">Llum</th>
-    <th width="33%">Escenes</th>
-    <th width="33%">Estudi</th>
-  </tr>
-  <tr>
-    <td valign="top"><a href="img/screenshots/screenshot_1.jpeg"><img src="img/screenshots/screenshot_1.jpeg" height="480" alt="Captura de Llum: estat de connexió, cicle natural i vista digital dels dos anells"></a></td>
-    <td valign="top"><a href="img/screenshots/screenshot_2.jpeg"><img src="img/screenshots/screenshot_2.jpeg" height="480" alt="Captura d'Escenes: miniatures de les escenes desades i de les paletes inicials"></a></td>
-    <td valign="top"><a href="img/screenshots/screenshot_3.jpeg"><img src="img/screenshots/screenshot_3.jpeg" height="480" alt="Captura d'Estudi: anell interior pintat en blau i vermell, pinzell i controls de color"></a></td>
-  </tr>
-  <tr>
-    <td valign="top">Consulta el llum i segueix el cicle natural.</td>
-    <td valign="top">Recupera atmosferes o parteix d'una paleta.</td>
-    <td valign="top">Dibuixa el color i aplica'l quan estigui a punt.</td>
-  </tr>
-</table>
+<!-- Amplades proporcionals a una altura de 480 px, sense columnes que comprimeixin les imatges. -->
+<p align="center">
+  <a href="img/screenshots/screenshot_1.jpeg"><img src="img/screenshots/screenshot_1.jpeg" width="240.23" height="480" alt="Captura de Llum: estat de connexió, cicle natural i vista digital dels dos anells"></a>
+  <a href="img/screenshots/screenshot_2.jpeg"><img src="img/screenshots/screenshot_2.jpeg" width="240.47" height="480" alt="Captura d'Escenes: miniatures de les escenes desades i de les paletes inicials"></a>
+  <a href="img/screenshots/screenshot_3.jpeg"><img src="img/screenshots/screenshot_3.jpeg" width="239.77" height="480" alt="Captura d'Estudi: anell interior pintat en blau i vermell, pinzell i controls de color"></a>
+</p>
+
+**Llum · Escenes · Estudi**, en aquest ordre: seguir el cicle natural, recuperar atmosferes i dibuixar el color.
 
 Les imatges es poden obrir a mida completa fent-hi clic. Les captures mostren la distribució digital dels LEDs; les fotografies de la secció anterior mostren el resultat físic amb el material difusor.
 
