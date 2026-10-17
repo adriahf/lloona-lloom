@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f6f5f0">
+  <meta name="color-scheme" content="light">
+  <title>Lloona Lloom · La teva llum</title>
+  <style>/* INLINE_STYLE */</style>
+</head>
+<body>
+<div class="app">
+  <header class="masthead">
+    <a class="brand" href="#llum" aria-label="Lloona Lloom, inici"><span class="brand-mark" aria-hidden="true">◒</span><span>lloona<span class="brand-light">lloom</span><span class="brand-caption mono">llum en òrbita</span></span></a>
+    <button id="connection" class="connection mono" title="Actualitza la connexió"><span class="status-dot"></span><span id="connectionText">connectant</span></button>
+  </header>
+  <div id="networkNotice" class="notice" role="status" hidden>Connexió interrompuda. Conservem el teu esborrany. <button id="retryConnection" class="text-button">Torna-ho a provar ↻</button></div>
+
+  <main>
+    <section id="view-llum" class="view" aria-labelledby="homeTitle">
+      <div class="section-heading"><p class="eyebrow mono">01 / LA TEVA LLUM</p><span id="modeBadge" class="pill mono">···</span></div>
+      <h1 id="homeTitle">La llum,<br><em>al seu ritme.</em></h1>
+      <p id="homeDescription" class="intro">Una òrbita de color. Una finestra al cel.</p>
+      <div class="lamp-stage">
+        <div class="stage-top mono"><span id="liveLabel">ESPERANT EL LLUM</span><span aria-hidden="true">↗</span></div>
+        <canvas id="liveCanvas" width="640" height="640" role="img" aria-label="Previsualització dels anells del llum"></canvas>
+        <div class="stage-bottom mono"><span>○ exterior</span><span>◎ interior</span></div>
+      </div>
+      <p class="preview-note">Vista digital dels LEDs · el color físic pot variar</p>
+      <div class="auto-card">
+        <span class="card-symbol" aria-hidden="true">☼</span>
+        <div><h2 id="autoTitle">Segueix el cel</h2><p id="autoDescription">Colors de dia. Lluna en pondre’s el sol.</p></div>
+        <button id="autoButton" class="small-button" data-device>Activa</button>
+      </div>
+      <div class="metrics">
+        <div><span class="eyebrow">LLUNA IL·LUMINADA</span><strong id="moonFraction">—<small>%</small></strong><span id="moonPhase" class="metric-note">Esperant dades</span></div>
+        <div><span class="eyebrow" id="timeLabel">HORA LOCAL</span><strong class="mono" id="localTime">—<small>:—</small></strong><span id="localDate" class="metric-note">—</span></div>
+      </div>
+      <details class="time-travel">
+        <summary><span><span aria-hidden="true">↺</span> Viatge en el temps</span><span class="mono summary-plus" aria-hidden="true">+</span></summary>
+        <p>Tria un moment i mostra’l al llum. Per reprendre el cicle natural, activa «Segueix el cel».</p>
+        <form id="simulationForm"><label for="simDate">Data i hora <span id="timezone" class="mono"></span></label><input type="datetime-local" id="simDate" min="1970-01-01T00:00" max="2099-12-31T23:59" required><button class="secondary full" type="submit" data-device>Simula al llum <span aria-hidden="true">↗</span></button></form>
+      </details>
+      <div class="quiet-footer mono">DOS ANELLS. INFINITES ATMOSFERES.</div>
+    </section>
+
+    <section id="view-escenes" class="view" aria-labelledby="scenesTitle" hidden>
+      <div class="section-heading"><p class="eyebrow mono">02 / COL·LECCIÓ</p><button id="refreshScenes" class="icon-button" aria-label="Actualitza les escenes" data-device>↻</button></div>
+      <h1 id="scenesTitle">Petites<br><em>atmosferes.</em></h1>
+      <p class="intro">Tria una escena. Fes-la teva.</p>
+      <div class="subheading"><h2>Les teves escenes</h2><span id="sceneCount" class="mono muted">—</span></div>
+      <div id="savedScenes" class="scene-grid" aria-live="polite"></div>
+      <div id="emptyScenes" class="empty-state" hidden><span class="empty-orbit" aria-hidden="true">◌</span><h3>La teva col·lecció comença aquí</h3><p>Pinta els dos anells i desa la teva primera atmosfera al llum.</p><button id="createScene" class="secondary">Crea una escena <span aria-hidden="true">＋</span></button></div>
+      <div class="subheading inspiration-heading"><h2>Un punt de partida</h2><span class="eyebrow mono">PALETES</span></div>
+      <div id="inspirationScenes" class="scene-grid"></div>
+      <p class="preview-note">Obrir una escena no modifica el llum.</p>
+    </section>
+
+    <section id="view-estudi" class="view" aria-labelledby="studioTitle" hidden>
+      <div class="section-heading"><p class="eyebrow mono">03 / ESTUDI</p><span id="draftBadge" class="pill mono">esborrany</span></div>
+      <div class="studio-heading"><h1 id="studioTitle">Dibuixa <em>llum.</em></h1><div class="history-buttons"><button id="undo" class="icon-button" aria-label="Desfer" disabled>↶</button><button id="redo" class="icon-button" aria-label="Refer" disabled>↷</button></div></div>
+      <p class="intro studio-intro">El teu llenç, dos anells. Aplica’l quan estigui a punt.</p>
+      <div class="segmented" id="ringSelector" role="group" aria-label="Anell per pintar"><button data-ring="int" aria-pressed="true">◎ Interior</button><button data-ring="ext" aria-pressed="false">○ Exterior</button><button data-ring="both" aria-pressed="false">Els dos</button></div>
+      <div class="editor-stage"><canvas id="editorCanvas" width="640" height="640" tabindex="0" role="application" aria-label="Editor dels anells. Fletxes per triar un LED, espai per pintar; selecciona l’anell amb els botons superiors." aria-describedby="canvasHelp"></canvas><div class="editor-center" aria-hidden="true"><span id="brushDot"></span><span id="editorHint" class="mono">INTERIOR</span><span class="center-hint">llisca per pintar</span></div></div>
+      <p id="canvasHelp" class="preview-note">Pinta sobre l’anell · amb teclat: ← → i espai</p>
+      <div class="tool-row"><div id="toolSelector" class="segmented tools" role="group" aria-label="Eina"><button data-tool="paint" aria-pressed="true">Pinta</button><button data-tool="erase" aria-pressed="false">Esborra</button><button data-tool="picker" aria-pressed="false">Captura</button></div><label class="brush-size" for="brushSize"><span class="eyebrow">TRAÇ</span><select id="brushSize" aria-label="Amplada del pinzell"><option value="1">1 LED</option><option value="3" selected>3 LEDs</option><option value="7">7 LEDs</option></select></label></div>
+      <section class="color-panel" aria-labelledby="colorTitle">
+        <div class="subheading"><h2 id="colorTitle">El teu color</h2><span id="colorHexLabel" class="mono muted">#CC702E</span></div>
+        <div class="color-controls">
+          <div class="wheel-wrap"><canvas id="colorWheel" width="320" height="320" tabindex="0" role="slider" aria-label="To del color. Fletxes esquerra i dreta per canviar el to; amunt i avall per canviar la saturació." aria-valuemin="0" aria-valuemax="359" aria-valuenow="25"></canvas></div>
+          <div class="sliders"><label for="brightness">Intensitat RGB <output id="brightnessValue" class="mono">5%</output></label><input id="brightness" type="range" min="0" max="255" value="13"><label for="whiteChannel">Blanc independent <output id="whiteValue" class="mono">0%</output></label><input id="whiteChannel" type="range" min="0" max="255" value="0"><button id="fireToggle" class="fire-toggle" aria-pressed="false"><span aria-hidden="true">≋</span> Crepitació <span id="fireState" class="mono">off</span></button></div>
+        </div>
+        <div id="swatches" class="swatches" role="group" aria-label="Colors ràpids"></div>
+        <details class="precision"><summary>Color precís <span class="mono" aria-hidden="true">RGB + W ↗</span></summary><div class="precision-fields"><label for="hexColor">RGB hexadecimal<input id="hexColor" type="text" value="#0D0703" maxlength="7" spellcheck="false" pattern="#[0-9a-fA-F]{6}"></label><label for="whiteExact">Canal W · 0–255<input id="whiteExact" type="number" min="0" max="255" value="0"></label></div><div class="precision-fields"><label for="hue">To <output id="hueValue" class="mono">25°</output><input id="hue" type="range" min="0" max="359" value="25"></label><label for="saturation">Saturació <output id="saturationValue" class="mono">78%</output><input id="saturation" type="range" min="0" max="100" value="78"></label></div></details>
+      </section>
+      <div class="fill-actions"><button id="fillRing" class="secondary">Omple l’interior</button><button id="clearRing" class="text-button">Neteja l’anell</button></div>
+      <details class="studio-options"><summary>Opcions del llenç <span aria-hidden="true">＋</span></summary><div class="option-buttons"><button id="readLamp" class="secondary" data-device>Copia el llum actual</button><button id="clearAll" class="secondary">Neteja tot</button><button id="fillAll" class="secondary">Omple tot</button></div></details>
+      <form id="saveForm" class="save-panel"><label for="presetName">Dona-li un nom</label><div class="save-row"><input id="presetName" type="text" maxlength="20" placeholder="Una petita atmosfera…" required autocomplete="off"><button id="saveScene" class="secondary" type="submit" data-device>Desa <span aria-hidden="true">↗</span></button></div><p>Es desa al llum sense canviar l’escena encesa.</p></form>
+      <div class="apply-bar"><div><strong id="draftStatus">El teu esborrany</strong><span id="applyHint">Encara no s’ha aplicat</span></div><button id="applyScene" class="primary" data-device>Aplica al llum <span aria-hidden="true">↗</span></button></div>
+    </section>
+  </main>
+  <nav class="bottom-nav" aria-label="Navegació principal"><button data-view="llum" aria-current="page"><span aria-hidden="true">◒</span>Llum</button><button data-view="escenes"><span aria-hidden="true">▦</span>Escenes</button><button data-view="estudi"><span aria-hidden="true">⌁</span>Estudi</button></nav>
+</div>
+<div id="toast" class="toast" role="status" hidden></div>
+<dialog id="sceneDialog" aria-labelledby="sceneDialogTitle"><button class="dialog-close icon-button" id="closeScene" aria-label="Tanca">×</button><p class="eyebrow mono">UNA ATMOSFERA PER A TU</p><h2 id="sceneDialogTitle"></h2><canvas id="scenePreview" width="480" height="480" role="img" aria-label="Vista prèvia de l’escena"></canvas><p id="sceneDetail" class="preview-note"></p><div class="dialog-actions"><button id="applyPreset" class="primary" data-device>Aplica al llum ↗</button><button id="editPreset" class="secondary">Edita a l’estudi</button><button id="deletePreset" class="text-button danger" data-device>Elimina l’escena</button></div></dialog>
+<dialog id="confirmDialog" aria-labelledby="confirmTitle"><p class="eyebrow mono">ABANS DE CONTINUAR</p><h2 id="confirmTitle"></h2><p id="confirmText"></p><div class="confirm-actions"><button id="cancelConfirm" class="secondary">Cancel·la</button><button id="acceptConfirm" class="primary">Continua</button></div></dialog>
+<script>/* INLINE_CORE */</script>
+<script>/* INLINE_APP */</script>
+</body>
+</html>

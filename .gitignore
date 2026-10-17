@@ -1,1 +1,23 @@
+# Credencials locals; secrets.example.h es manté al repositori.
 secrets.h
+
+# Còpia local del projecte que pot contenir credencials.
+/lloonalloom.zip
+
+# Compilació Arduino i eines de desenvolupament.
+.build/
+/lloonalloom/build/
+node_modules/
+__pycache__/
+*.py[cod]
+*.elf
+*.bin
+*.hex
+*.map
+*.o
+*.a
+
+# Fitxers locals del sistema operatiu.
+.DS_Store
+Thumbs.db
+Desktop.ini
