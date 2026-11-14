@@ -2,7 +2,7 @@
 
 **Un llum en òrbita: colors de dia, lluna de nit.**
 
-Lloona-Lloom és un llum basat en **ESP32 i LEDs SK6812 RGBW** que interpreta el cicle del sol i de la lluna per a una ubicació concreta. Durant el dia combina colors; quan es fa de nit, representa la fase i l'orientació de la lluna amb llum blanca. Es programa amb **Arduino IDE** i es controla des del navegador del mòbil, a través d'una interfície web allotjada al mateix ESP32.
+Lloona-Lloom és un llum basat en **ESP32 i LEDs SK6812 RGBW** que interpreta el cicle del sol i de la lluna per a una ubicació concreta. Durant el dia combina parelles harmòniques de color; quan es fa de nit, representa la fase i l'orientació de la lluna amb llum blanca. El firmware es programa amb **Arduino IDE** i la interfície completa de control s'integra dins de **Home Assistant**, mentre l'ESP32 manté tota la lògica astronòmica local i una pàgina web lleugera de manteniment.
 
 El projecte neix de la voluntat de tenir una lluna pròpia a casa: experimentar amb el color, programar atmosferes i seguir el cel que es veu per la finestra. La inspiració visual és [MOODMOON, de Sebastian Hepting per a Ingo Maurer (2021)](https://www.ingo-maurer.com/en/products/moodmoon/).
 
@@ -21,12 +21,11 @@ Fotografies del muntatge real: el mateix objecte explora la llum blanca reprodui
 ## Contingut
 
 - [Què pot fer](#que-pot-fer)
-- [Interfície web v2](#interficie-web-v2)
+- [Interfície i integració amb Home Assistant](#interficie-ha)
 - [Maquinari](#maquinari)
 - [Instal·lació amb Arduino IDE](#installacio-arduino)
 - [Com funciona](#com-funciona)
 - [Estructura del repositori](#estructura)
-- [Desenvolupament i proves](#desenvolupament)
 - [API i format de les escenes](#api)
 - [Llicència](#llicencia)
 
@@ -36,19 +35,22 @@ Fotografies del muntatge real: el mateix objecte explora la llum blanca reprodui
 
 | Mode | Comportament |
 | --- | --- |
-| **Cicle natural** | Sincronitza l'hora per NTP i calcula el cel per a les coordenades configurades. Colors diürns i lluna nocturna. |
+| **Cicle natural** | Sincronitza l'hora per NTP i calcula el cel per a les coordenades configurades. Parelles diürnes harmòniques i lluna nocturna. |
 | **Simulació** | Mostra el resultat d'una data i hora escollides, sense haver d'esperar que arribin. |
 | **Manual** | Aplica escenes RGBW als dos anells, amb control per LED i efecte de foc opcional. |
+| **Calibració** | Emet 27 mostres de referència per anell (una sola corona activa alhora) per ajustar la paleta diürna des de Home Assistant. |
 
-Les escenes es poden desar a la memòria del dispositiu amb **LittleFS** i recuperar més endavant. El firmware també inclou actualitzacions per Wi-Fi amb **ArduinoOTA**.
+L'encesa i l'apagat del llum (`power`) funcionen de manera independent del mode actiu. L'estat d'execució, les escenes guardades, la variació del dia i la paleta diürna calibrada es desen a **LittleFS**, de manera que el dispositiu continua sent autònom fins i tot sense connexió amb el servidor. El firmware també inclou actualitzacions per Wi-Fi amb **ArduinoOTA**.
 
-<a id="interficie-web-v2"></a>
+<a id="interficie-ha"></a>
 
-## Interfície web v2
+## Interfície i integració amb Home Assistant
 
-La interfície està pensada per al mòbil vertical i s'adapta també a l'escriptori. Combina un fons marfil, verd fosc, titulars serif i dades monoespaiades. Les tres pestanyes separen el seguiment del llum, la biblioteca d'escenes i l'edició del color.
+La interfície completa d'usuari —el seguiment del cel, la biblioteca d'escenes, l'estudi de dibuix LED i l'assistent de calibració— ara viu integrada dins de **Home Assistant**, que es comunica amb l'ESP32 mitjançant la seva API HTTP versionada (`/api/v1`) i en comprova periòdicament les capacitats.
 
 ### Captures de pantalla
+
+Mostra visual de les tres vistes principals de la interfície integrada:
 
 <!-- Amplades proporcionals a una altura de 480 px, sense columnes que comprimeixin les imatges. -->
 <p align="center">
@@ -63,24 +65,21 @@ Les imatges es poden obrir a mida completa fent-hi clic. Les captures mostren la
 
 ### Llum: seguir el cel
 
-Mostra l'estat dels dos anells, el mode actiu, la fase lunar i l'hora local. **«Segueix el cel»** reprèn el cicle automàtic. El formulari de simulació queda en un desplegable secundari: permet triar una data i una hora segons la zona horària del telèfon, indicada al mateix formulari. Les coordenades geogràfiques continuen sent les de `secrets.h`.
+Mostra l'estat real dels dos anells, el mode actiu, l'encesa/apagat, la fase lunar i l'hora local. Permet reprendre el cicle automàtic, canviar la parella diürna del dia actual sense esperar a l'endemà, fer una previsualització de lectura o activar la simulació per a una data i hora concretes.
 
 ### Escenes: guardar atmosferes
 
-La biblioteca llegeix les escenes desades a LittleFS i en mostra miniatures. Cada escena es pot ampliar, aplicar, editar o eliminar. Hi ha quatre paletes inicials per començar a experimentar; només ocupen memòria del dispositiu quan l'usuari les desa.
+La biblioteca llegeix les escenes desades a LittleFS de l'ESP32 i en mostra miniatures. Cada escena es pot aplicar, editar o eliminar, amb protecció d'escriptura atòmica i sense interrompre el llum mentre es navega o es desa un esborrany.
 
 ### Estudi: dibuixar llum
 
-- Selecció de l'anell interior, l'exterior o tots dos.
-- Pinzell d'1, 3 o 7 LEDs, goma i captura del color RGBW i de l'efecte de foc.
-- Roda HSV, colors ràpids, intensitat RGB, canal blanc independent i entrada precisa.
-- Desfer i refer fins a 30 passos; cada gest ocupa una entrada de l'historial.
-- Traços interpolats, també quan travessen el punt de 0° de l'anell.
-- Recuperació de l'últim esborrany al navegador amb `localStorage`, quan està disponible.
+Editor per pintar l'anell interior, l'exterior o tots dos amb control per LED dels quatre canals RGBW i de l'efecte de foc individual, respectant el límit de potència manual del firmware.
 
-**Navegar, editar i desar no interromp el llum.** «Aplica al llum» envia l'escena completa i activa el mode manual. Desar escriu l'esborrany a LittleFS sense aplicar-lo abans. «Segueix el cel» retorna al funcionament automàtic.
+### Calibració i web local de manteniment
 
-La UI inclou controls tàctils amplis, focus visible, edició amb teclat i respecte per la preferència de moviment reduït. Utilitza fonts del sistema i no carrega scripts, fonts ni recursos d'Internet. La vista digital fa visibles els colors molt tènues, però no és una simulació fotomètrica ni una calibració del blanc. La crepitació de la vista ampliada és il·lustrativa; les miniatures són estàtiques.
+Home Assistant incorpora també el flux de calibració colorimètrica per anell i envia al dispositiu la taula diürna calibrada resultant, que queda desada a LittleFS.
+
+A l'adreça `http://<IP-del-dispositiu>/`, l'ESP32 continua servint directament des de la memòria flash (`PROGMEM`) una **pantalla curta de manteniment** amb autenticació opcional per clau. Aquesta web local permet encendre o apagar el llum, tornar al mode astronòmic a temps real, aturar una calibració en curs i consultar l'estat bàsic encara que Home Assistant no estigui disponible.
 
 <a id="maquinari"></a>
 
@@ -100,7 +99,7 @@ La configuració del sketch actual és:
 
 L'anell exterior crea l'atmosfera i l'interior representa l'astre. La capa d'abstracció del maquinari tradueix angles de 0° a 360° als LEDs físics i compensa el sentit de muntatge de l'anell interior.
 
-La [llista de materials i les notes de muntatge](docs/BoM.md) detallen el controlador, l'alimentació, el cablejat i els elements de protecció.
+La [llista de materials i les notes de muntatge](docs/BoM.md) detallen el controlador, l'alimentació, el cablejat i els elements de protecció. Durant la calibració, un sol anell pot assolir una suma RGBW de fins a 255 per LED; cal assegurar que la font i el cablejat estiguin dimensionats adequadament.
 
 <a id="installacio-arduino"></a>
 
@@ -108,66 +107,83 @@ La [llista de materials i les notes de muntatge](docs/BoM.md) detallen el contro
 
 ### 1. Preparar l'entorn
 
-Instal·la el paquet de plaques **esp32 d'Espressif Systems** al gestor de plaques d'Arduino IDE i aquestes llibreries al gestor de biblioteques:
+Instal·la el paquet de plaques **esp32 d'Espressif Systems** al gestor de plaques d'Arduino IDE i aquestes llibreries al gestor de biblioteques. Les versions comprovades al perfil [sketch.yaml](lloonalloom/sketch.yaml) per al firmware **1.1.1** són:
 
-- **Adafruit NeoPixel**.
-- **NTPClient**, de Fabrice Weinberg.
-- **ArduinoJson**.
+- **esp32** (Espressif Systems): **3.3.2**
+- **Adafruit NeoPixel**: **1.12.5**
+- **NTPClient** (Fabrice Weinberg): **3.2.1**
+- **ArduinoJson**: **6.21.5** *(selecciona expressament la branca 6)*
 
-`WiFi`, `ESPmDNS`, `WiFiUdp`, `ArduinoOTA`, `WebServer` i `LittleFS` formen part del paquet ESP32.
+`WiFi`, `ESPmDNS`, `WiFiUdp`, `ArduinoOTA`, `WebServer`, `LittleFS` i `mbedtls` formen part del paquet ESP32. El perfil de compilació verificat és **ESP32 Dev Module** (`esp32:esp32:esp32`).
 
-La verificació de compilació documentada per a la v2 es va fer amb **ESP32 core 3.3.7**, **ArduinoJson 7.4.3** i **ESP32 Dev Module** (`esp32:esp32:esp32`). Aquestes són les versions de referència de la v2, no una exigència d'utilitzar les versions més recents.
+### 2. Obrir el sketch i configurar `secrets.h`
 
-### 2. Obrir el sketch i configurar les dades locals
+Obre [lloonalloom/lloonalloom.ino](lloonalloom/lloonalloom.ino). Mantén dins de la mateixa carpeta `lloonalloom/` tots els fitxers `.h` del projecte (`types.h`, `api_support.h`, `day_palette.h`, `webpage.h` i `secrets.h`); l'IDE els carregarà com a pestanyes.
 
-Obre [lloonalloom/lloonalloom.ino](lloonalloom/lloonalloom.ino). Mantén el nom de la carpeta `lloonalloom/` igual que el del sketch, amb `webpage.h` i `web_api.h` al costat.
-
-Copia [secrets.example.h](lloonalloom/secrets.example.h) a `lloonalloom/secrets.h` i introdueix-hi les dades de la teva xarxa i ubicació:
+Copia [secrets.example.h](lloonalloom/secrets.example.h) a `lloonalloom/secrets.h` i introdueix-hi les teves dades locals:
 
 ```cpp
 #pragma once
-#define SECRET_SSID "EL_TEU_WIFI"
-#define SECRET_PASS "LA_TEVA_CONTRASENYA"
-#define SECRET_DEVICE_NAME "Lloona-Lloom"
-#define SECRET_LATITUDE 41.40
-#define SECRET_LONGITUDE 2.18
+#define SECRET_SSID "wifi-name"
+#define SECRET_PASS "wifi-password"
+#define SECRET_DEVICE_NAME "lloona"
+#define SECRET_LATITUDE 41.4
+#define SECRET_LONGITUDE 2.17
+// Token Bearer opcional per protegir l'API; posa el mateix valor a Home Assistant.
+#define SECRET_API_TOKEN ""
+// OTA activa per defecte. Omple la contrasenya abans de compilar.
+// Posa false només si tries expressament actualitzacions només per USB.
+#define SECRET_ENABLE_OTA true
+#define SECRET_OTA_PASSWORD ""
 ```
 
-Si ja tens un `secrets.h`, conserva'l. El `.gitignore` exclou aquest fitxer; `secrets.example.h` és la plantilla pública.
+Notes sobre configuració i seguretat:
 
-### 3. Compilar i carregar
+- **`SECRET_API_TOKEN`**: és opcional. Si li dones un valor, totes les rutes `/api` i `/api/v1` exigiran la capçalera `Authorization: Bearer <token>` i hauràs de configurar el mateix valor a la integració de Home Assistant. Si queda buit, l'API accepta peticions a la xarxa local sense token.
+- **`SECRET_OTA_PASSWORD` i `SECRET_ENABLE_OTA`**: l'OTA queda habilitada per defecte. Si `SECRET_ENABLE_OTA` és `true` i `SECRET_OTA_PASSWORD` és buit o absent (per exemple en reutilitzar un `secrets.h` antic), la compilació s'atura amb un `static_assert` explícit per evitar perdre accidentalment les càrregues per Wi-Fi. Només si vols desactivar l'OTA expressament, defineix `#define SECRET_ENABLE_OTA false` (aleshores caldrà USB per actualitzar).
+- **Secrets fora de Git**: el `.gitignore` únic de l'arrel exclou `secrets.h` i qualsevol variant `*secrets*.h` (conservant només `secrets.example.h`). Si un `secrets.h` ja s'hagués afegit alguna vegada a l'índex de Git, `.gitignore` no el deixa de seguir automàticament; cal retirar-lo de l'índex sense esborrar el fitxer local amb `git rm --cached -- lloonalloom/secrets.h`.
 
-1. Connecta l'ESP32 per USB i selecciona la placa i el port corresponents.
-2. Si actualitzes un llum existent, conserva l'esquema de particions i mantén desactivada l'opció d'esborrar tota la flaix per preservar les escenes.
-3. Compila i carrega el sketch des d'Arduino IDE.
-4. Connecta el mòbil o l'ordinador a la mateixa xarxa Wi-Fi que l'ESP32.
-5. Obre `http://<IP-del-dispositiu>/` al navegador. Pots consultar la IP assignada a la llista de dispositius del router.
+### 3. Verificar i carregar
 
-**La interfície ja està incorporada a `webpage.h`, en PROGMEM.** Per carregar el firmware preparat no cal instal·lar Python ni Node.js, ni pujar fitxers web a LittleFS. LittleFS es reserva per a les escenes. La sincronització del rellotge es fa per NTP amb `pool.ntp.org` i necessita accés a la xarxa.
+1. Connecta l'ESP32 per USB (o selecciona el port de xarxa OTA si ja hi ha un firmware amb OTA escoltant) i tria la placa i l'esquema de particions habituals.
+2. **Conserva la partició LittleFS**: en actualitzar un llum existent, mantén l'esquema de particions i **no activis** l'esborrat complet de la flash ni formatis LittleFS, ja que les escenes i la paleta diürna calibrada viuen en aquesta partició.
+3. Prem **Verifica**. Com a referència, el firmware ocupa aproximadament **1,10 MB** de programa i **52,6 kB** de variables globals; assegura't que la partició d'aplicació té prou espai sense alterar la partició de dades.
+4. Prem **Carrega**. Un cop reiniciat, comprova que el dispositiu es reconnecta a la Wi-Fi (`pool.ntp.org` requereix accés a Internet per sincronitzar l'hora per NTP).
+5. Connecta'l des de **Home Assistant** (o espera que la integració en detecti les noves capacitats via `/api/v1/info`), o bé comprova l'estat bàsic a `http://<IP-del-dispositiu>/`.
 
-Després de la primera càrrega per USB, el firmware permet actualitzacions per Wi-Fi amb ArduinoOTA quan el port de xarxa està disponible a Arduino IDE.
+> **Si un firmware instal·lat prèviament no escolta OTA:** la contrasenya OTA només funciona quan el receptor OTA ja està actiu al dispositiu. Si l'ESP32 rebutja el port UDP `3232`, caldrà una primera càrrega puntual per USB (mantenint desactivat l'esborrat complet de la flash per conservar LittleFS).
 
 <a id="com-funciona"></a>
 
 ## Com funciona
 
-### Cicle solar i colors diürns
+### Cicle solar i parelles diürnes harmòniques
 
-L'ESP32 obté l'hora UTC per NTP i calcula la posició solar per a la latitud i longitud configurades. El motor utilitza una aproximació basada en algorismes astronòmics de Jean Meeus. El canvi entre dia i nit fa servir una altitud solar de referència de −0,83°.
+L'ESP32 obté l'hora UTC per NTP i calcula la posició solar per a la latitud i longitud configurades mitjançant algorismes astronòmics basats en Jean Meeus. El canvi entre dia i nit utilitza una altitud solar de referència de **−0,83°**.
 
-Durant el dia, cada anell rep un color de la paleta. La selecció és determinista: el dia julià ajustat a la longitud actua com a llavor aleatòria. Per això, un mateix dia conserva la parella de colors encara que es reiniciï el dispositiu. En mode natural, el càlcul es renova cada minut.
+Durant el dia, en lloc de triar dos colors independents, el sistema selecciona una de les **8 parelles harmòniques** predefinides (`DAY_PAIR_INDICES`). La selecció és determinista a partir del dia julià ajustat a la longitud (`mix32`) i alterna la paritat per evitar repetir la mateixa parella en dos dies consecutius. Si es vol canviar la combinació del dia actual, `/api/v1/day/new` incrementa una variant que es desa a `/day_state.json`.
+
+Quan Home Assistant envia una paleta diürna calibrada (`POST /api/v1/day/palette`), aquesta taula de 8 parelles es desa a `/day-palette-v1.json` (amb cada canal en un rang `0..10` i suma per LED ≤ 10 per preservar el nivell diürn suau) i el motor astronòmic l'adopta localment fins i tot després de reiniciar.
 
 ### Fase i orientació de la lluna
 
-De nit, el motor calcula la fracció il·luminada i l'orientació del costat il·luminat, tenint en compte l'angle paral·làctic de l'observador. Això permet que la representació lunar canviï amb la data, l'hora i la ubicació.
+De nit, el motor calcula la fracció il·luminada a partir de l'elongació aparent real Sol-Lluna i determina l'orientació del costat il·luminat tenint en compte l'angle paral·làctic de l'observador.
 
-El renderitzat projecta cada LED amb una funció cosinus i aplica una banda de suavitzat a la frontera entre llum i ombra. La lluna es dibuixa amb el canal blanc dedicat de la tira RGBW.
+El renderitzat projecta cada LED amb una funció cosinus sobre el canal blanc dedicat (`MAX_MOON_BRIGHTNESS = 15`), amb ajustos específics per al difusor físic:
 
-### Simulació i control manual
+- **Lluna nova realment apagada**: si la fracció il·luminada és `<= 0,001`, tots els LEDs queden a zero.
+- **Atenuació de creixents i minvants fins**: per sota del `25 %` d'il·luminació, la brillantor màxima s'escala progressivament entre el `35 %` i el `100 %` perquè la difusió física no ompli el centre del disc.
+- **Reducció del suavitzat prop de lluna nova**: per sota del `8 %`, la banda de transició entre llum i ombra s'estreny proporcionalment per evitar llum residual.
 
-La simulació calcula un instant concret i el manté fins que es canvia de mode o de data. L'API admet dates entre **1970 i 2099**, amb el límit addicional de 2038 quan el core utilitza un `time_t` de 32 bits.
+### Simulació, control manual i persistència
 
-El mode manual aplica colors independents als dos anells i permet marcar LEDs amb efecte de foc. L'animació modula aquests LEDs a partir del seu color base. Les escenes desades persisteixen a LittleFS; el mode inicial del firmware és el cicle natural.
+- **Previsualització i simulació**: `/api/v1/preview` permet consultar els càlculs d'una data sense alterar els LEDs ni el mode; `/api/v1/simulate` aplica l'instant demanat. L'API accepta marques de temps Unix entre els anys **2000 i 2100** (`946684800`–`4102444800`, amb el límit de 2038 quan el core utilitza `time_t` de 32 bits).
+- **Límit de potència manual**: cada LED en mode manual passa per `clampManualColor` perquè la suma `R + G + B + W` no superi mai `MANUAL_MAX_TOTAL = 48`. Els LEDs marcats amb el flag de foc (`f = 1`) modulen dinàmicament el seu color base.
+- **Persistència i concurrència**: els canvis d'estat (mode, encès/apagat, simulació i darrer disseny manual) es desen de manera diferida a `/runtime-v1.json` a LittleFS. L'API utilitza sessions temporals (`X-Lloona-Session`, vigència de 120 segons) i revisions optimistes (`If-Match`) per evitar que dues pantalles se sobreescriguin alhora.
+
+### Calibració colorimètrica
+
+El mode `MODE_CALIBRATION` recorre **27 mostres fixes** definides al firmware (`FONS`, primaris `R/G/B/W` al 40 %, 70 % i 100 %, barreges dobles/triples/quàdruples i mostres de validació `VAL-A`, `VAL-B` i `VAL-C`). Només s'il·lumina un anell alhora (`inner` o `outer`) amb un límit de seguretat `R + G + B + W <= 255` per LED. En finalitzar —o automàticament després de **30 minuts d'inactivitat**— el firmware restaura el mode i els píxels anteriors.
 
 <a id="estructura"></a>
 
@@ -175,113 +191,66 @@ El mode manual aplica colors independents als dos anells i permet marcar LEDs am
 
 ```text
 .
-├── README.md                 # Documentació principal del projecte i de la UI v2
+├── README.md                 # Documentació principal del projecte i firmware
 ├── LICENSE                   # Apache License 2.0
-├── .gitignore                # Credencials, compilacions i fitxers locals
+├── .gitignore                # Regles globals d'exclusió (secrets, compilacions i sistema)
 ├── docs/
-│   └── BoM.md                # Materials i notes de muntatge
+│   └── BoM.md                # Llista de materials i notes de muntatge
 ├── img/
 │   ├── photos/               # Fotografies del llum real
-│   └── screenshots/          # Captures de la interfície web v2
-└── lloonalloom/               # Carpeta del sketch d'Arduino
-    ├── lloonalloom.ino        # Maquinari, astronomia, animació i bucle principal
-    ├── secrets.example.h     # Plantilla pública de configuració
-    ├── web_api.h             # Rutes HTTP, validació i persistència
-    ├── webpage.h             # UI empaquetada en PROGMEM, inclosa al repositori
-    ├── web/
-    │   ├── index.html        # Estructura, textos i accessibilitat
-    │   ├── style.css         # Disseny adaptable
-    │   ├── core.js           # Colors, escenes i geometria del pinzell
-    │   └── app.js            # Interacció, renderitzat i comunicació amb l'ESP32
-    ├── tools/
-    │   ├── build_web.py      # Empaquetat de la UI, sense dependències externes
-    │   └── preview.py        # Demostració local amb API simulada
-    └── tests/
-        ├── core.test.cjs     # Proves de la lògica de la interfície
-        └── browser.cjs       # Proves d'interacció amb Microsoft Edge
+│   └── screenshots/          # Captures de la interfície integrada
+└── lloonalloom/              # Carpeta del sketch d'Arduino
+    ├── lloonalloom.ino       # Maquinari, motor astronòmic, calibració, animació i servidor HTTP
+    ├── types.h               # Estructures de dades i enumeració de modes
+    ├── api_support.h         # Versionat /api/v1, autenticació, sessions, power i persistència
+    ├── day_palette.h         # Validació i persistència de la paleta diürna calibrada
+    ├── webpage.h             # Web local curta de manteniment en PROGMEM
+    ├── secrets.example.h     # Plantilla pública de configuració (copiar a secrets.h)
+    └── sketch.yaml           # Perfil de placa, core ESP32 i versions de llibreries
 ```
 
-Les eines i les proves es mantenen al costat del sketch perquè utilitzen rutes relatives a `web/` i `.build/`. `webpage.h` es versiona perquè el projecte es pugui carregar directament amb Arduino IDE. Les credencials reals, els artefactes de compilació i les dependències locals queden fora de Git.
-
-<a id="desenvolupament"></a>
-
-## Desenvolupament i proves
-
-Les ordres d'aquesta secció s'executen **des de `lloonalloom/`**:
-
-```sh
-cd lloonalloom
-```
-
-### Editar la interfície
-
-Edita els fitxers de `web/` i regenera la capçalera amb Python 3:
-
-```sh
-python tools/build_web.py
-```
-
-Inclou tant les fonts de `web/` com el `webpage.h` regenerat al mateix commit.
-
-### Previsualitzar sense ESP32
-
-```sh
-python tools/preview.py
-```
-
-Obre **http://127.0.0.1:8765**. La demostració serveix el mateix HTML que s'empaqueta per al firmware, amb dades simulades i escenes en memòria. No es connecta al llum físic; els canvis desapareixen en aturar el servidor.
-
-### Verificar l'empaquetat i la lògica
-
-Amb Python 3 i Node.js instal·lats, sense paquets addicionals:
-
-```sh
-python tools/build_web.py --check
-node --test tests/core.test.cjs
-```
-
-### Proves al navegador
-
-Amb Microsoft Edge instal·lat i la demostració en marxa, executa en un altre terminal, també des de `lloonalloom/`:
-
-```sh
-npm install --prefix .build/qa playwright-core
-node tests/browser.cjs
-```
-
-La bateria cobreix el format RGBW/F, colors de baixa intensitat, traços al pas per 0°, historial, esborranys, desament sense aplicació, aplicació al llum, eliminació, simulació i recuperació d'errors de connexió. Les proves de navegador revisen amplades de 320, 390, 430 i 1024 píxels i deixen captures a `.build/qa/screenshots/`, una carpeta ignorada per Git.
-
-La demostració i aquestes proves no substitueixen la verificació al dispositiu de l'orientació dels anells, el color RGBW físic, la persistència LittleFS i el canvi entre dia i nit.
+Les credencials reals (`lloonalloom/secrets.h`), els fitxers comprimits (`*.zip`) i els artefactes de compilació locals queden exclosos pel `.gitignore` de l'arrel.
 
 <a id="api"></a>
 
 ## API i format de les escenes
 
 <details>
-<summary>Referència tècnica: rutes HTTP, persistència i compatibilitat</summary>
+<summary>Referència tècnica: API v1, sessions, persistència i format d'escenes</summary>
 
-El servidor és **síncron**, basat en `WebServer`, i serveix la pàgina amb `send_P()` des de PROGMEM. El navegador serialitza les peticions, llegeix les miniatures d'una en una i consulta l'estat cada 15 segons. L'actualització periòdica s'atura quan la pàgina queda oculta. Les escriptures fallides no es reintenten automàticament.
+El servidor HTTP és **síncron**, basat en `WebServer`, i serveix la pàgina de manteniment amb `send_P()` des de PROGMEM. Totes les rutes d'API estan exposades sota `/api/v1/...` i conserven l'àlies `/api/...` per compatibilitat.
+
+- **Autenticació opcional**: si `SECRET_API_TOKEN` no és buit, cal enviar `Authorization: Bearer <token>`.
+- **Sessions i concurrència**: les operacions d'escriptura o canvi d'estat exigeixen la capçalera `X-Lloona-Session` (identificador alfanumèric amb `-` o `_`, fins a 80 caràcters, bloqueig exclusiu durant 120 segons) i admeten `If-Match: <revision>` per detectar conflictes. Les rutes d'emergència (`POST /api/v1/calibration/stop` i `POST /api/v1/power` amb `{"on":false}`) es permeten sense bloqueig de sessió.
 
 | Ruta | Ús |
 | --- | --- |
-| `GET /api/status` | Mode, rellotge, dades lunars i sortida actual dels anells `ext`/`int`. |
-| `POST /api/mode?set=astro` | Reprendre el cicle; `set=manual` aplica l'última escena manual. |
-| `POST /api/simulate?ts=<epoch>` | Simular un instant UTC, expressat en segons Unix. |
-| `POST /api/led` | Validar i aplicar `{ext,int}`, activant manual en una sola acció. |
-| `GET /api/colors` | Llegir l'última escena manual en ordre visual. |
-| `GET /api/presets/list` | Llistar els noms de les escenes, amb resposta per fragments. |
-| `GET /api/presets/get?name=...` | Llegir una escena en ordre visual sense activar-la. |
-| `POST /api/presets/save?name=...` | Desar `{ext,int}`; sense cos conserva el comportament antic. |
-| `POST /api/presets/load?name=...` | Aplicar una escena desada; ruta conservada per compatibilitat. |
-| `POST /api/presets/delete?name=...` | Eliminar una escena. |
+| `GET /api/v1/info` | Versió d'API i firmware (`1.1.1`), MAC del dispositiu i mapa de capacitats. |
+| `POST /api/v1/session` | Reclamar la sessió de control o alliberar-la (`{"release":true}`). |
+| `POST /api/v1/power` | Encendre o apagar la sortida LED (`{"on":true\|false}`) sense perdre el mode. |
+| `GET /api/v1/status` | Estat complet: versió, `boot_id`, `revision`, `power`, rellotge, anells `ext`/`int`, mode, dades lunars i parella del dia. |
+| `GET /api/v1/preview?ts=<epoch>` | Previsualització astronòmica i de parella diürna de lectura, sense modificar els LEDs. |
+| `POST /api/v1/mode?set=astro\|manual` | Canviar entre el cicle astronòmic i l'última escena manual. |
+| `POST /api/v1/simulate?ts=<epoch>` | Simular un instant UTC (`946684800`–`4102444800`). |
+| `POST /api/v1/day/new` | Passar a la següent variant de parella diürna per al dia actual i desar-la a `/day_state.json`. |
+| `GET /api/v1/day/palette` | Llegir la signatura (64 caràcters hexadecimals) i el recompte de la paleta diürna activa. |
+| `POST /api/v1/day/palette` | Validar i desar a `/day-palette-v1.json` les 8 parelles diürnes calibrades. |
+| `POST /api/v1/led` | Validar, limitar (`MANUAL_MAX_TOTAL = 48`) i aplicar `{ext,int}` en mode manual. |
+| `GET /api/v1/colors` | Llegir l'última escena manual en ordre visual. |
+| `GET /api/v1/presets/list` | Llistar els noms de les escenes desades. |
+| `GET /api/v1/presets/get?name=...` | Llegir una escena en ordre visual sense aplicar-la. |
+| `POST /api/v1/presets/save?name=...` | Desar `{ext,int}` (o l'estat manual actual si s'envia sense cos). |
+| `POST /api/v1/presets/load?name=...` | Aplicar una escena desada en mode manual. |
+| `POST /api/v1/presets/delete?name=...` | Eliminar una escena. |
+| `GET /api/v1/calibration/samples` | Llistar les 27 mostres immutables de calibració. |
+| `GET /api/v1/calibration/status` | Estat actual del mode de calibració (`active`, `ring`, `index`, `count`, `sample`). |
+| `POST /api/v1/calibration/start?ring=inner\|outer` | Iniciar la calibració en un anell (requereix el llum encès). |
+| `POST /api/v1/calibration/step?index=<0..26>` | Mostrar la mostra indicada a l'anell seleccionat. |
+| `POST /api/v1/calibration/stop` | Aturar la calibració i restaurar l'estat previ. |
 
-Els noms s'han de codificar per a URL. Cada escena conserva el fitxer `p_<nom>.json` i els camps `name`, `ext` i `int`. Cada LED ocupa **9 caràcters `RRGGBBWWF`**: quatre canals en hexadecimal i un indicador de foc (`0` o `1`). Cada anell de 72 LEDs ocupa, per tant, 648 caràcters.
+Els noms d'escena s'han de codificar per a URL (màxim 20 caràcters Unicode i 80 bytes, sense `/` ni `\`). Cada LED ocupa **9 caràcters `RRGGBBWWF`**: quatre canals en hexadecimal i un indicador de foc (`0` o `1`). Cada anell de 72 LEDs ocupa, per tant, 648 caràcters.
 
-Els fitxers a LittleFS utilitzen l'ordre físic dels LEDs; l'API converteix entre aquest ordre i l'ordre visual de la UI. Les escenes compatibles amb aquest format no necessiten migració. El desament escriu primer un fitxer temporal i el reanomena en acabar.
-
-Tots dos anells es validen abans d'aplicar canvis. Els noms es serialitzen com a JSON i es mostren amb `textContent`; les col·lisions entre noms amb espais i guions baixos es rebutgen si corresponen a una altra escena.
-
-La UI v2 s'ha de carregar amb el firmware que l'acompanya: `/api/led` aplica l'escena sense demanar un canvi previ a manual, i `/api/simulate` activa la simulació quan rep una data vàlida.
+Els fitxers nous s'emmagatzemen atòmicament a LittleFS amb nom `p_<sha256_prefix>.json` per evitar col·lisions entre noms, mantenint compatibilitat de lectura, actualització i esborrat amb els fitxers antics `p_<nom>.json`. L'API converteix automàticament entre l'ordre físic dels LEDs i l'ordre visual de la interfície.
 
 </details>
 
